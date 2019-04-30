@@ -1,0 +1,81 @@
+from rdflib import Graph, URIRef, BNode, Literal,RDF
+from scipy.stats import ttest_ind
+import numpy as np
+# read data from 2 files 
+heart1 = np.genfromtxt("heart1.csv",  delimiter=",")
+heart2 = np.genfromtxt("heart2.csv",  delimiter=",")
+print("****************PART1(t-test)*****************")
+print("Non-failing heart data (NF):")
+print(heart1)
+print("failing heart data (F):")
+print(heart2)
+heart1_mean = np.mean(heart1)
+heart2_mean = np.mean(heart2)
+print("NF Mean value:",heart1_mean)
+print("F Mean value:",heart2_mean)
+heart1_std = np.std(heart1)
+heart2_std = np.std(heart2)
+print("NF std value:",heart1_std)
+print("F std value:",heart2_std)
+ttest,pval = ttest_ind(heart1,heart2)
+print("p-value:",pval)
+if pval <0.05:
+  print("H0 is rejected!")
+else:
+  print("H0 is accepted")
+print("****************PART2(RDF)*****************")
+# Describe the statistical hypothesis test in machine readable form
+from rdflib.namespace import XSD
+# First, we initialize an RDF Graph and bind some prefixes
+g = Graph()
+g.bind('obo', 'http://purl.obolibrary.org/obo/')
+g.bind('ex', 'http://example.org/')
+# I have saved my data in 2 file and read data in heart1 & heart2 separately.
+# Next, we define some needed vocabulary
+obo = dict()
+obo['two sample t-test with unequal variance'] = URIRef('http://purl.obolibrary.org/obo/STATO_0000304')
+obo['has specified input'] = URIRef('http://purl.obolibrary.org/obo/OBI_0000293')
+obo['has specified output'] = URIRef('http://purl.obolibrary.org/obo/OBI_0000299')
+obo['p-value'] = URIRef('http://purl.obolibrary.org/obo/OBI_0000175')
+obo['has value specification'] = URIRef('http://purl.obolibrary.org/obo/OBI_0001938')
+obo['scalar value specification'] = URIRef('http://purl.obolibrary.org/obo/OBI_0001931')
+obo['has specified numeric value'] = URIRef('http://purl.obolibrary.org/obo/OBI_0001937')
+obo['iron-responsive element binding'] = URIRef('http://purl.obolibrary.org/obo/GO_0030350')
+i = URIRef('http://example.org/i')
+# Now, populate the graph with statements
+# As an example, the following statement types the resource (blank node) 'n1' as 'two sample t-test with unequal variance'
+n1 = BNode()
+g.add((n1, RDF.type, obo['two sample t-test with unequal variance']))
+
+# Now, state that the t-test has iron-responsive element binding as a specified input (one statement to complete)
+n2 = BNode()
+g.add((n1, obo['has specified input'], n2))
+g.add((n2, RDF.type, obo['iron-responsive element binding']))
+
+# Next, state that the t-test has the p-value computed above as a specified output (two statements to complete)
+g.add((n1, obo['has specified output'], obo['p-value']))
+g.add((obo['p-value'], RDF.type,obo['scalar value specification']))
+# The literal value of the p-value is represented as a scalar value specification with a specified numeric value (three statements to complete)
+g.add(( obo['p-value'], obo['has value specification'], i))
+g.add((i, RDF.datatype, XSD.double))
+# Type the literal as double
+g.add((i, obo['has specified numeric value'], Literal(0.00018)))
+# Finally, serialize and print the graph in RDF/XML format
+print(g.serialize(format='xml'))
+
+# Process the machine readable statistical hypothesis test by completing the following SPARQL query that returns the p-value
+print("****************PART3(SPARQL)*****************")
+q = """
+PREFIX obo: <http://purl.obolibrary.org/obo/>
+SELECT ?pvalue WHERE {
+  ?r a obo:STATO_0000304 .
+  ?r obo:OBI_0000293 [ a obo:GO_0030350 ].
+  ?r obo:OBI_0000299  obo:OBI_0000175.
+  obo:OBI_0000175 a obo:OBI_0001931.
+  obo:OBI_0000175 obo:OBI_0001938 ?v.
+  ?v obo:OBI_0001937 ?pvalue.
+                      
+                    }
+                """
+for qs in g.query(q):
+    print("p_value:",qs[0])
